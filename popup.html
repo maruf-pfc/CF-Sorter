@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CF Sorter</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- ═══ Header ══════════════════════════════════════════════════════ -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">CF</div>
+      <div>
+        <div class="header-title">CF Sorter</div>
+        <div class="header-subtitle">Sort & filter problems</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="btn-refresh" class="btn-icon" title="Refresh data">↻</button>
+    </div>
+  </header>
+
+  <!-- ═══ Sync Status ════════════════════════════════════════════════════ -->
+  <div id="sync-status" class="sync-status hidden">
+    <span class="sync-dot"></span>
+    <span>Synced to Codeforces tab</span>
+  </div>
+
+  <!-- ═══ Filters ═════════════════════════════════════════════════════ -->
+  <section class="filters">
+    <div class="filter-row">
+      <span class="filter-label">Rating</span>
+      <div class="rating-inputs">
+        <input type="number" id="rating-min" class="rating-input" placeholder="800" min="800" max="3500" step="100">
+        <span class="rating-separator">—</span>
+        <input type="number" id="rating-max" class="rating-input" placeholder="3500" min="800" max="3500" step="100">
+      </div>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">Tag</span>
+      <select id="tag-select" class="sort-select" style="flex:1;">
+        <option value="all">All Tags</option>
+        <option value="2-sat">2-sat</option>
+        <option value="binary search">binary search</option>
+        <option value="bitmasks">bitmasks</option>
+        <option value="brute force">brute force</option>
+        <option value="chinese theorem">chinese theorem</option>
+        <option value="combinatorics">combinatorics</option>
+        <option value="constructive algorithms">constructive algorithms</option>
+        <option value="data structures">data structures</option>
+        <option value="dfs and similar">dfs and similar</option>
+        <option value="divide and conquer">divide and conquer</option>
+        <option value="dp">dp</option>
+        <option value="dsu">dsu</option>
+        <option value="expression parsing">expression parsing</option>
+        <option value="fft">fft</option>
+        <option value="flows">flows</option>
+        <option value="games">games</option>
+        <option value="geometry">geometry</option>
+        <option value="graphs">graphs</option>
+        <option value="greedy">greedy</option>
+        <option value="hashing">hashing</option>
+        <option value="implementation">implementation</option>
+        <option value="interactive">interactive</option>
+        <option value="math">math</option>
+        <option value="matrices">matrices</option>
+        <option value="meet-in-the-middle">meet-in-the-middle</option>
+        <option value="number theory">number theory</option>
+        <option value="probabilities">probabilities</option>
+        <option value="schedules">schedules</option>
+        <option value="shortest paths">shortest paths</option>
+        <option value="sortings">sortings</option>
+        <option value="string suffix structures">string suffix structures</option>
+        <option value="strings">strings</option>
+        <option value="ternary search">ternary search</option>
+        <option value="trees">trees</option>
+        <option value="two pointers">two pointers</option>
+      </select>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">Index</span>
+      <div class="division-pills" id="index-pills">
+        <button class="pill active" data-index="all">All</button>
+        <button class="pill" data-index="A">A</button>
+        <button class="pill" data-index="B">B</button>
+        <button class="pill" data-index="C">C</button>
+        <button class="pill" data-index="D">D</button>
+        <button class="pill" data-index="E">E</button>
+        <button class="pill" data-index="F">F</button>
+        <button class="pill" data-index="G+">G+</button>
+      </div>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">Division</span>
+      <div class="division-pills" id="division-pills">
+        <button class="pill active" data-div="all">All</button>
+        <button class="pill" data-div="Div. 1">Div 1</button>
+        <button class="pill" data-div="Div. 2">Div 2</button>
+        <button class="pill" data-div="Div. 3">Div 3</button>
+        <button class="pill" data-div="Div. 4">Div 4</button>
+        <button class="pill" data-div="Educational">Edu</button>
+        <button class="pill" data-div="Global">Global</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ Toolbar ═════════════════════════════════════════════════════ -->
+  <div class="toolbar">
+    <div class="result-count">Showing <span id="result-count">0</span> problems</div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="tags-toggle">
+        <span class="toggle-label">Tags</span>
+        <div class="toggle-switch" id="toggle-tags" title="Show tags for unsolved problems"></div>
+      </div>
+      <div class="search-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" class="search-input" placeholder="Search problems…">
+      </div>
+      <select id="sort-select" class="sort-select">
+        <option value="rating-asc">Rating ↑</option>
+        <option value="rating-desc">Rating ↓</option>
+        <option value="name-asc">Name A→Z</option>
+        <option value="name-desc">Name Z→A</option>
+        <option value="solved-desc">Most Solved</option>
+        <option value="solved-asc">Least Solved</option>
+        <option value="id-desc" selected>Newest</option>
+        <option value="id-asc">Oldest</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ═══ Settings Bar ════════════════════════════════════════════════ -->
+  <div class="settings-bar">
+    <div class="settings-left">
+      <div class="handle-input-wrapper">
+        <span class="handle-icon">👤</span>
+        <input type="text" id="handle-input" class="handle-input" placeholder="CF Handle…" spellcheck="false">
+        <span id="handle-status" class="handle-status"></span>
+      </div>
+    </div>
+    <div class="settings-right">
+      <div class="tags-toggle">
+        <span class="toggle-label">Pure CF</span>
+        <div class="toggle-switch" id="toggle-pure" title="Hide sponsored and non-standard rounds (e.g. Pinely, EPIC)"></div>
+      </div>
+      <div class="tags-toggle">
+        <span class="toggle-label">Hide Solved</span>
+        <div class="toggle-switch" id="toggle-hide-solved" title="Hide solved problems"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Problem List ════════════════════════════════════════════════ -->
+  <div class="problem-list" id="problem-list">
+    <div class="state-container" id="loading-state">
+      <div class="spinner"></div>
+      <div class="state-title">Loading problems…</div>
+      <div class="state-subtitle">Fetching data from Codeforces API. This may take a few seconds on first load.</div>
+    </div>
+    <div class="state-container hidden" id="empty-state">
+      <div class="state-icon">📭</div>
+      <div class="state-title">No problems found</div>
+      <div class="state-subtitle">Try adjusting your filters or search query.</div>
+    </div>
+    <div class="state-container hidden" id="error-state">
+      <div class="state-icon">⚠️</div>
+      <div class="state-title">Failed to load</div>
+      <div class="state-subtitle">Could not fetch data from the Codeforces API. Please check your connection and try again.</div>
+    </div>
+  </div>
+
+  <!-- ═══ Pagination ══════════════════════════════════════════════════ -->
+  <div class="pagination hidden" id="pagination"></div>
+
+  <!-- ═══ Footer ══════════════════════════════════════════════════════ -->
+  <footer class="footer">
+    <div class="footer-text">Data from <a href="https://codeforces.com" target="_blank" rel="noopener">codeforces.com</a> API • CF Sorter v1.1</div>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
