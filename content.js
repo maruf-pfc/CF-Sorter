@@ -14,23 +14,157 @@
   let isActive = false;
 
   // ─── INIT: Check for active state from previous load ───────────────
-  chrome.storage.local.get("cf_sorter_active_state", (data) => {
-    const state = data.cf_sorter_active_state;
-    if (state && state.type === "CF_SORTER_UPDATE" && state.problems) {
-      currentProblems = state.problems;
-      solvedKeys = new Set(state.solvedKeys || []);
-      showTagsForUnsolved = !!state.showTagsForUnsolved;
-      currentPage = 1;
-      isActive = true;
+  // On page refresh, we re-fetch solved data and re-apply filters so that
+  // newly solved problems are hidden automatically (if "Hide Solved" is on).
+  chrome.storage.local.get(
+    ["cf_sorter_active_state", "cf_sorter_config", "cf_cached_data", "cf_user_handle"],
+    (data) => {
+      const state = data.cf_sorter_active_state;
+      const config = data.cf_sorter_config || {};
+      const cachedData = data.cf_cached_data;
+      const savedHandle = data.cf_user_handle;
 
-      // Ensure DOM is ready before rendering
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", renderTable);
-      } else {
-        renderTable();
+      if (state && state.type === "CF_SORTER_UPDATE") {
+        showTagsForUnsolved = !!state.showTagsForUnsolved;
+        currentPage = 1;
+        isActive = true;
+
+        // Determine the user handle — from the page, saved handle, or state
+        const pageHandle = getUserHandle();
+        const handle = pageHandle || savedHandle || null;
+
+        // We need to re-apply the same filters as the popup does, using the
+        // full problem list (not the already-filtered snapshot), so that the
+        // "Hide Solved" toggle works correctly with fresh solve data.
+        const fullProblems = (cachedData && cachedData.problems) ? cachedData.problems : null;
+
+        const doRender = () => {
+          if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", renderTable);
+          } else {
+            renderTable();
+          }
+        };
+
+        // If we have a handle, re-fetch solved status in the background
+        if (handle) {
+          chrome.runtime.sendMessage({ type: "GET_SOLVED", handle }, (solvedData) => {
+            if (solvedData && solvedData.solvedKeys) {
+              solvedKeys = new Set(solvedData.solvedKeys);
+            } else {
+              solvedKeys = new Set(state.solvedKeys || []);
+            }
+
+            // Re-apply filters if we have the full problem set and saved config
+            if (fullProblems && config) {
+              currentProblems = applyFiltersOnProblems(fullProblems, config, solvedKeys);
+            } else {
+              // Fallback: use the saved filtered list but update solved keys
+              currentProblems = state.problems || [];
+              if (config.hideSolved) {
+                currentProblems = currentProblems.filter(
+                  (p) => !solvedKeys.has(`${p.contestId}-${p.index}`)
+                );
+              }
+            }
+
+            // Update the stored active state so it stays current
+            updateStoredActiveState();
+            doRender();
+          });
+        } else {
+          // No handle — just use stored data as-is
+          currentProblems = state.problems || [];
+          solvedKeys = new Set(state.solvedKeys || []);
+          doRender();
+        }
       }
     }
-  });
+  );
+
+  // ─── Re-apply popup filters on the full problem list ──────────────────
+  function applyFiltersOnProblems(problems, config, solvedSet) {
+    const minR = parseInt(config.ratingMin) || 0;
+    const maxR = parseInt(config.ratingMax) || 9999;
+    const activeDivs = (config.activeDivs && !config.activeDivs.includes("all"))
+      ? config.activeDivs : null;
+    const activeIndices = (config.activeIndices && !config.activeIndices.includes("all"))
+      ? config.activeIndices : null;
+    const activeTag = config.activeTag || "all";
+    const query = (config.search || "").trim().toLowerCase();
+    const hideSolved = !!config.hideSolved;
+    const pureCFOnly = !!config.pureCFOnly;
+
+    let filtered = problems.filter((p) => {
+      // Rating
+      const r = p.rating || 0;
+      if (r < minR || r > maxR) return false;
+
+      // Division
+      if (activeDivs) {
+        const match = p.divisions.some((d) => activeDivs.includes(d));
+        if (!match) return false;
+      }
+
+      // Index
+      if (activeIndices) {
+        const pIdx = (p.index || "").toUpperCase();
+        const match = activeIndices.some((idx) => {
+          if (idx === "G+") return pIdx >= "G";
+          return pIdx.startsWith(idx);
+        });
+        if (!match) return false;
+      }
+
+      // Tag
+      if (activeTag !== "all") {
+        if (!p.tags || !p.tags.includes(activeTag)) return false;
+      }
+
+      // Search
+      if (query) {
+        const haystack = `${p.contestId}${p.index} ${p.name} ${(p.tags||[]).join(" ")} ${p.contestName}`.toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+
+      // Hide solved
+      if (hideSolved && solvedSet.has(`${p.contestId}-${p.index}`)) return false;
+
+      // Pure CF
+      if (pureCFOnly && !p.isStrict) return false;
+
+      return true;
+    });
+
+    // Sort
+    const sort = config.sort || "id-desc";
+    filtered.sort((a, b) => {
+      switch (sort) {
+        case "rating-asc":  return (a.rating || 0) - (b.rating || 0);
+        case "rating-desc": return (b.rating || 0) - (a.rating || 0);
+        case "name-asc":    return a.name.localeCompare(b.name);
+        case "name-desc":   return b.name.localeCompare(a.name);
+        case "solved-desc": return (b.solvedCount || 0) - (a.solvedCount || 0) || (b.contestId - a.contestId);
+        case "solved-asc":  return (a.solvedCount || 0) - (b.solvedCount || 0) || (b.contestId - a.contestId);
+        case "id-desc":     return b.contestId - a.contestId || b.index.localeCompare(a.index);
+        case "id-asc":      return a.contestId - b.contestId || a.index.localeCompare(b.index);
+        default: return 0;
+      }
+    });
+
+    return filtered;
+  }
+
+  // ─── Keep stored active state in sync ─────────────────────────────────
+  function updateStoredActiveState() {
+    const payload = {
+      type: "CF_SORTER_UPDATE",
+      problems: currentProblems,
+      solvedKeys: [...solvedKeys],
+      showTagsForUnsolved: showTagsForUnsolved,
+    };
+    chrome.storage.local.set({ cf_sorter_active_state: payload });
+  }
 
   // ─── Extract logged-in user handle from the Codeforces page ────────────
   function getUserHandle() {
