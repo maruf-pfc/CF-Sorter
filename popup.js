@@ -193,15 +193,18 @@ async function loadSolvedProblems(handle) {
 
   updateHandleStatus("loading");
 
-  chrome.runtime.sendMessage({ type: "GET_SOLVED", handle }, (data) => {
-    if (data && data.solvedKeys) {
-      solvedKeysSet = new Set(data.solvedKeys);
-      updateHandleStatus("loaded");
-    } else {
-      solvedKeysSet = new Set();
-      updateHandleStatus("error");
-    }
-    applyFilters();
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: "GET_SOLVED", handle }, (data) => {
+      if (data && data.solvedKeys) {
+        solvedKeysSet = new Set(data.solvedKeys);
+        updateHandleStatus("loaded");
+      } else {
+        solvedKeysSet = new Set();
+        updateHandleStatus("error");
+      }
+      applyFilters();
+      resolve();
+    });
   });
 }
 
@@ -597,10 +600,19 @@ $handleInput.addEventListener("input", () => {
 $refresh.addEventListener("click", () => {
   $refresh.classList.add("refreshing");
   chrome.runtime.sendMessage({ type: "FORCE_REFRESH" }, (data) => {
-    $refresh.classList.remove("refreshing");
     if (data && data.problems) {
       allProblems = data.problems;
-      applyFilters();
+      if (userHandle) {
+        // loadSolvedProblems calls applyFilters inside it
+        loadSolvedProblems(userHandle).finally(() => {
+          $refresh.classList.remove("refreshing");
+        });
+      } else {
+        applyFilters();
+        $refresh.classList.remove("refreshing");
+      }
+    } else {
+      $refresh.classList.remove("refreshing");
     }
   });
 });

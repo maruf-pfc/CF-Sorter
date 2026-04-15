@@ -7,7 +7,7 @@ const CACHE_TIMESTAMP_KEY = "cf_cache_ts";
 const SOLVED_CACHE_KEY = "cf_solved_data";
 const SOLVED_CACHE_TS_KEY = "cf_solved_ts";
 const CACHE_DURATION_MS = 6 * 60 * 60 * 1000; // 6 hours
-const SOLVED_CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutes (more frequent for solve status)
+const SOLVED_CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes (more frequent for solve status)
 
 // ─── Division Parser ─────────────────────────────────────────────────────────
 function parseDivision(contestName) {
@@ -189,7 +189,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true; // async
   }
   if (msg.type === "FORCE_REFRESH") {
-    fetchAndCache().then((data) => sendResponse(data));
+    chrome.storage.local.remove([SOLVED_CACHE_KEY, SOLVED_CACHE_TS_KEY], () => {
+      fetchAndCache().then((data) => sendResponse(data));
+    });
     return true;
   }
   if (msg.type === "GET_SOLVED") {
